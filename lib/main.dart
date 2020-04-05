@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import "dart:convert" as convert;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -54,6 +53,20 @@ class _HomeState extends State<Home> {
         ));
   }
 
+  Future<String> hej() async {
+    final http.Response response = await http.post(
+      'https://jsonplaceholder.typicode.com/albums',
+      headers: <String, String>{
+        // 'Content-Type': 'application/json; charset=UTF-8',
+      },
+      body: jsonEncode(<String, String>{
+        'title': "title",
+      }),
+    );
+
+    print(response.body.toString());
+  }
+
   Future<String> login() async {
     jwt = await storage.read(key: userTokenKey);
     if (jwt != null) return jwt;
@@ -90,7 +103,9 @@ class _UserState extends State<UserWidget> {
   void login() {}
 
   @override
-  Widget build(BuildContext context) {}
+  Widget build(BuildContext context) {
+    return null;
+  }
 }
 
 Future<Building> fetchBuildings() async {

@@ -1,69 +1,133 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'AnswerOptionWidget.dart';
+import 'package:http/http.dart' as http;
 
 class QuestionsWidget extends StatefulWidget {
   const QuestionsWidget(this.jwt);
 
   final roomId = "5db749e9d4449b0aa6b77e6c";
-  final jwt;
+  final String jwt;
 
   @override
   State<StatefulWidget> createState() => _QuestionsState();
 }
 
 class _QuestionsState extends State<QuestionsWidget> {
-  final List<Question> questions = [
-    Question(
-        "q1",
-        "How is the temperature?How is the temperature?How is the temperature?",
-        [AnswerOption("value", "id1"), AnswerOption("answer2", "id2")]),
-    Question("q2", "How are you doing?",
-        [AnswerOption("answer", "id3"), AnswerOption("answer2", "id4")]),
-    Question("q3", "value3?", [
-      AnswerOption("answer", "id5"),
-      AnswerOption("answer2", "id6"),
-      AnswerOption("answer2", "id7"),
-    ]),
-    Question("q2", "How are you doing?",
-        [AnswerOption("answer", "id3"), AnswerOption("answer2", "id4")]),
-    Question("q2", "How are you doing?",
-        [AnswerOption("answer", "id3"), AnswerOption("answer2", "id4")]),
-    Question("q2", "How are you doing?",
-        [AnswerOption("answer", "id3"), AnswerOption("answer2", "id4")]),
-  ];
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  final List<Question> questions = List();
 
   @override
-  Widget build(BuildContext context) {
-    final questionWidgets = questions
-        .map((q) => Card(
-            elevation: 5,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.0)),
-            child: Container(
-              decoration: BoxDecoration(
-                  color: Colors.white70,
-                  borderRadius: BorderRadius.all(Radius.circular(10))),
-              padding: EdgeInsets.all(16),
-              child: QuestionWidget(
-                q.value,
-                q.answerOptions,
-              ),
-            )))
-        .toList();
+  Widget build(BuildContext context) => FutureBuilder<List<Question>>(
+      builder: (ctx, snapshot) {
+        Widget bodyWidget;
+        if (snapshot.hasData) {
+          bodyWidget = DisplayQuestionsWidget(
+            questions: snapshot.data,
+          );
+        } else if (snapshot.hasError) {
+          bodyWidget = FetchQuestionsError(
+            errorMsg: snapshot.error,
+          );
+        } else {
+          bodyWidget = Center(child: CircularProgressIndicator());
+        }
+        return Container(color: const Color(0xffffcc80), child: bodyWidget);
+      },
+      future: fetchQuestions());
+  // DisplayQuestionsWidget(questions: questions);
 
-    return Container(
-      color: const Color(0xffffcc80),
-      padding: EdgeInsets.all(8),
-      child: ListView(
-        children: questionWidgets,
+  Future<List<Question>> fetchQuestions() async {
+    final headers = {
+      "x-auth-token":
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1ZTI4YWI5ODhhMDdkNTBhZDEyOGNiZjUiLCJyb2xlIjoxLCJpYXQiOjE1ODA0ODM3OTd9.ULQSGc2Y9_6N05jtRerx7gR_eP0xDu0MOTS1bhWjpnw",
+      "roomId": "5db749e9d4449b0aa6b77e6c"
+    };
+
+    final response = await http.get(
+        'http://feedme.compute.dtu.dk/api-dev/questions/',
+        headers: headers);
+
+    print(response.body);
+    if (response.statusCode == 200) {
+      List<Question> fetchedQuestions = new List();
+
+      final jsonData = json.decode(response.body) as List;
+
+      for (var item in jsonData) {
+        fetchedQuestions.add(Question.fromJson(item));
+      }
+
+      return fetchedQuestions;
+      // If the server did return a 200 OK response,
+      // then parse the JSON.
+
+      // print(response.body);
+    } else {
+      // If the server did not return a 200 OK response,
+      // then throw an exception.
+      throw Exception('Failed to login user ${response.statusCode}');
+    }
+  }
+}
+
+class FetchQuestionsError extends StatelessWidget {
+  final errorMsg;
+
+  const FetchQuestionsError({Key key, this.errorMsg}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        errorMsg,
+        style: TextStyle(color: Colors.white),
       ),
     );
   }
 }
 
-class QuestionWidget extends StatefulWidget {
-  const QuestionWidget(this.value, this.answerOptions);
+class DisplayQuestionsWidget extends StatelessWidget {
+  final List<Question> questions;
 
+  const DisplayQuestionsWidget({Key key, this.questions}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final questionWidgets = questions.map((q) {
+      return Card(
+          margin: EdgeInsets.only(top: 8, left: 8, right: 8),
+          elevation: 5,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.0)),
+          child: Container(
+            decoration: BoxDecoration(
+                color: Colors.white70,
+                borderRadius: BorderRadius.all(Radius.circular(10))),
+            padding: EdgeInsets.all(16),
+            child: QuestionWidget(
+              q.value,
+              q.id,
+              q.answerOptions,
+            ),
+          ));
+    }).toList();
+
+    return ListView(
+      children: questionWidgets,
+    );
+  }
+}
+
+class QuestionWidget extends StatefulWidget {
+  const QuestionWidget(this.value, this.questionId, this.answerOptions);
   final value;
+  final questionId;
+
   final List<AnswerOption> answerOptions;
 
   @override
@@ -72,6 +136,13 @@ class QuestionWidget extends StatefulWidget {
 
 class _QuestionState extends State<QuestionWidget> {
   final selectedAnswer = null;
+  int timesAnswered;
+  String feedbackId;
+  @override
+  void initState() {
+    super.initState();
+    timesAnswered = 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,47 +170,71 @@ class _QuestionState extends State<QuestionWidget> {
         }
       });
     });
+
+    if (timesAnswered == 0) {
+      postFeedback(answerId);
+      timesAnswered++;
+    } else {
+      updateFeedback(answerId);
+    }
   }
-}
 
-class AnswerOptionsWidget extends StatelessWidget {
-  const AnswerOptionsWidget(
-      this.answerOptions, this.onSelected, this.selectedAnswer,
-      {Key key})
-      : super(key: key);
+  Future<void> postFeedback(String answerId) async {
+    final headers = <String, String>{
+      // TODO: this should be replaced by valid jwt
+      "x-auth-token":
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1ZTI4YWI5ODhhMDdkNTBhZDEyOGNiZjUiLCJyb2xlIjoxLCJpYXQiOjE1ODA0ODM3OTd9.ULQSGc2Y9_6N05jtRerx7gR_eP0xDu0MOTS1bhWjpnw",
+      'Content-Type': 'application/json; charset=UTF-8',
+    };
 
-  final selectedAnswer;
-  final onSelected;
-  final List<AnswerOption> answerOptions;
+    final body = jsonEncode(<String, String>{
+      'answerId': answerId,
+      "questionId": widget.questionId,
+      "roomId": "5db749e9d4449b0aa6b77e6c"
+    });
 
-  @override
-  Widget build(BuildContext context) {
-    final accentCol = Theme.of(context).accentColor;
-    final txtCol = Theme.of(context).textTheme.bodyText1.color;
-    final _answerOptionWidgets = answerOptions
-        .map((e) => ChoiceChip(
-              backgroundColor: Colors.white70,
-              label: Text(e.value,
-                  style: TextStyle(color: e.selected ? txtCol : null)),
-              shape: StadiumBorder(
-                  side: BorderSide(
-                      color: e.selected
-                          ? Theme.of(context).accentColor
-                          : Colors.grey)),
-              onSelected: (b) {
-                onSelected(b, e.id);
-              },
-              selected: e.selected,
-              selectedColor: Colors.white70,
-            ))
-        .toList();
+    print(body);
+    final response = await http.post(
+        'http://feedme.compute.dtu.dk/api-dev/feedback/',
+        body: body,
+        headers: headers);
 
-    return Container(
-        margin: EdgeInsets.only(top: 8),
-        child: Wrap(
-            spacing: 10,
-            alignment: WrapAlignment.center,
-            children: _answerOptionWidgets));
+    if (response.statusCode != 200) {
+      // If the server did not return a 200 OK response,
+      // then throw an exception.
+
+      throw Exception(
+          'Failed to post question ${response.statusCode}, error message: ${response.body}');
+    }
+
+    feedbackId = json.decode(response.body)["_id"];
+
+    print(feedbackId);
+  }
+
+  void updateFeedback(String answerId) async {
+    final headers = <String, String>{
+      // TODO: this should be replaced by valid jwt
+      "x-auth-token":
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1ZTI4YWI5ODhhMDdkNTBhZDEyOGNiZjUiLCJyb2xlIjoxLCJpYXQiOjE1ODA0ODM3OTd9.ULQSGc2Y9_6N05jtRerx7gR_eP0xDu0MOTS1bhWjpnw",
+      'Content-Type': 'application/json; charset=UTF-8',
+    };
+
+    final body = jsonEncode(<String, String>{'answerId': answerId});
+
+    print(body);
+    final response = await http.patch(
+        'http://feedme.compute.dtu.dk/api-dev/feedback/change-answer/$feedbackId',
+        body: body,
+        headers: headers);
+
+    if (response.statusCode != 200) {
+      // If the server did not return a 200 OK response,
+      // then throw an exception.
+
+      throw Exception(
+          'Failed to post question ${response.statusCode}, error message: ${response.body}');
+    }
   }
 }
 
@@ -147,14 +242,30 @@ class Question {
   final String id;
   final String value;
   final List<AnswerOption> answerOptions;
+  final List<String> roomIds;
 
-  Question(this.id, this.value, this.answerOptions);
-}
+  factory Question.fromJson(Map<String, dynamic> json) {
+    final List<AnswerOption> answers = (json["answerOptions"] as List)
+        .map((e) => AnswerOption.fromJson(e))
+        .toList();
 
-class AnswerOption {
-  final String value;
-  final String id;
-  bool selected;
+    final List<String> rooms =
+        (json["rooms"] as List).map((e) => e.toString()).toList();
 
-  AnswerOption(this.value, this.id, {this.selected = false});
+    return Question(
+      id: json["_id"],
+      value: json["value"],
+      answerOptions: answers,
+      roomIds: rooms,
+      isActive: json["isActive"],
+    );
+  }
+
+  Question({
+    this.id,
+    this.value,
+    this.answerOptions,
+    this.roomIds,
+    isActive,
+  });
 }
